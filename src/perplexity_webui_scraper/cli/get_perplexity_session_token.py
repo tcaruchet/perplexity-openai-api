@@ -9,6 +9,7 @@ from sys import exit
 from typing import NoReturn
 
 from curl_cffi.requests import Session
+from orjson import loads
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
@@ -67,7 +68,7 @@ def _initialize_session() -> tuple[Session, str]:
 
     with console.status("[bold green]Initializing secure connection...", spinner="dots"):
         session.get(BASE_URL)
-        csrf_data = session.get(f"{BASE_URL}/api/auth/csrf").json()
+        csrf_data = loads(session.get(f"{BASE_URL}/api/auth/csrf").content)
         csrf = csrf_data.get("csrfToken")
 
         if not csrf:
@@ -82,7 +83,7 @@ def _request_verification_code(session: Session, csrf: str, email: str) -> None:
     """
 
     with console.status("[bold green]Sending verification code...", spinner="dots"):
-        r = session.post(
+        response = session.post(
             f"{BASE_URL}/api/auth/signin/email?version=2.18&source=default",
             json={
                 "email": email,
@@ -93,8 +94,8 @@ def _request_verification_code(session: Session, csrf: str, email: str) -> None:
             },
         )
 
-        if r.status_code != 200:
-            raise ValueError(f"Authentication request failed: {r.text}")
+        if response.status_code != 200:
+            raise ValueError(f"Authentication request failed: {response.text}")
 
 
 def _validate_and_get_redirect_url(session: Session, email: str, user_input: str) -> str:
@@ -106,7 +107,7 @@ def _validate_and_get_redirect_url(session: Session, email: str, user_input: str
         if user_input.startswith("http"):
             return user_input
 
-        r_otp = session.post(
+        response_otp = session.post(
             f"{BASE_URL}/api/auth/otp-redirect-link",
             json={
                 "email": email,
@@ -116,10 +117,10 @@ def _validate_and_get_redirect_url(session: Session, email: str, user_input: str
             },
         )
 
-        if r_otp.status_code != 200:
+        if response_otp.status_code != 200:
             raise ValueError("Invalid verification code.")
 
-        redirect_path = r_otp.json().get("redirect")
+        redirect_path = loads(response_otp.content).get("redirect")
 
         if not redirect_path:
             raise ValueError("No redirect URL received.")
