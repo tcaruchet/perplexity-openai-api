@@ -344,7 +344,7 @@ class Conversation:
             "model_preference": model.identifier,
             "mode": model.mode,
             "search_focus": cfg.search_focus.value,
-            "search_recency_filter": cfg.time_range.value if cfg.time_range.value else None,
+            "search_recency_filter": cfg.time_range.value or None,
             "is_incognito": not cfg.save_to_library,
             "use_schematized_api": USE_SCHEMATIZED_API,
             "local_search_enabled": cfg.coordinates is not None,
