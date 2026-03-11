@@ -878,9 +878,83 @@ def _append_recent_history_with_budget(
     messages: list[ChatMessage],
     budget: int,
 ) -> None:
-    """Append recent, higher.content}")
+    """Append recent, higher-value history while staying within a fixed budget."""
+    if budget <= 0:
+        return
 
-    return "\n\n".join(parts)
+    recent_fragments: list[str] = []
+    used = 0
+    per_fragment_budget = max(180, min(1200, budget // 4))
+
+    for message in reversed(messages):
+        if message.role == "system":
+            continue
+
+        fragments = _message_to_query_fragment(message, per_fragment_budget)
+        if not fragments:
+            continue
+
+        candidate_text = "\n\n".join(fragments)
+        addition_cost = len(candidate_text) + (2 if recent_fragments else 0)
+        if used + addition_cost > budget:
+            if not recent_fragments and budget > 120:
+                truncated = _truncate_text(candidate_text, budget)
+                if truncated:
+                    recent_fragments.append(truncated)
+            break
+
+        recent_fragments.append(candidate_text)
+        used += addition_cost
+
+    parts.extend(reversed(recent_fragments))
+
+
+def messages_to_query(
+    messages: list[ChatMessage],
+    tools: list[ToolDefinition] | None = None,
+    tool_choice: str | dict[str, Any] | None = None,
+    response_format: ResponseFormat | None = None,
+) -> str:
+    """Convert messages to a compact single Perplexity query string."""
+    parts: list[str] = []
+
+    system_messages = [message for message in messages if message.role == "system" and message.content]
+    if system_messages:
+        system_budget = max(1000, MAX_UPSTREAM_QUERY_CHARS // 4)
+        combined_system = "\n\n".join(f"[System]\n{message.content}" for message in system_messages)
+        parts.append(_truncate_text(combined_system, system_budget))
+
+    if tools:
+        tool_budget = max(1200, MAX_UPSTREAM_QUERY_CHARS // 4)
+        parts.append(_build_tool_prompt_section(tools, tool_choice, tool_budget))
+
+    if response_format:
+        response_budget = max(500, MAX_UPSTREAM_QUERY_CHARS // 6)
+        response_section = _build_response_format_section(response_format, response_budget)
+        if response_section:
+            parts.append(response_section)
+
+    latest_user_messages = [message for message in messages if message.role == "user" and message.content]
+    if latest_user_messages:
+        latest_user = latest_user_messages[-1]
+        parts.append(f"Latest user request: {_truncate_text(latest_user.content or '', 2400)}")
+
+    current_query = "\n\n".join(parts)
+    remaining_budget = max(0, MAX_UPSTREAM_QUERY_CHARS - len(current_query) - 2)
+    history_budget = int(MAX_UPSTREAM_QUERY_CHARS * MESSAGE_HISTORY_BUDGET_RATIO)
+    _append_recent_history_with_budget(parts, messages, min(remaining_budget, history_budget))
+
+    final_query = "\n\n".join(parts)
+    if len(final_query) > MAX_UPSTREAM_QUERY_CHARS:
+        LOGGER.warning(
+            "Upstream query exceeded budget (%s chars), applying final truncation",
+            len(final_query),
+        )
+        final_query = _truncate_text(final_query, MAX_UPSTREAM_QUERY_CHARS)
+    elif len(final_query) > int(MAX_UPSTREAM_QUERY_CHARS * 0.85):
+        LOGGER.info("Upstream query compaction engaged: %s chars", len(final_query))
+
+    return final_query
 
 
 def estimate_tokens(text: str) -> int:
