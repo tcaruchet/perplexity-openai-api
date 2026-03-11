@@ -5,11 +5,15 @@ from __future__ import annotations
 from os import PathLike  # noqa: TC003
 from pathlib import Path
 from sys import stderr
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from .enums import LogLevel
+
+
+if TYPE_CHECKING:
+    from loguru import Logger
 
 
 logger.remove()
@@ -30,7 +34,8 @@ def configure_logging(
     if level_str == "DISABLED":
         logger.disable("perplexity_webui_scraper")
         _logging_configured = False
-        return None
+
+        return
 
     logger.enable("perplexity_webui_scraper")
 
@@ -69,10 +74,10 @@ def configure_logging(
     _logging_configured = True
 
 
-def get_logger(name: str) -> Any:
+def get_logger(name: str) -> Logger:
     """Get a logger instance bound to the given module name."""
 
-    return logger.bind(module=name)
+    return logger.bind(module=name)  # type: ignore[return-value]
 
 
 def log_request(
@@ -84,7 +89,7 @@ def log_request(
 ) -> None:
     """Log an outgoing HTTP request."""
 
-    logger.debug(f"HTTP {method} {url} | params={params} body_size={body_size}")
+    logger.debug("HTTP {} {} | params={} body_size={}", method, url, params, body_size)
 
 
 def log_response(
@@ -97,7 +102,8 @@ def log_response(
     """Log an HTTP response."""
 
     level = "DEBUG" if status_code < 400 else "WARNING"
-    logger.log(level, f"HTTP {method} {url} | status={status_code} elapsed_ms={elapsed_ms:.2f}")
+    elapsed_fmt = f"{elapsed_ms:.2f}" if elapsed_ms is not None else "N/A"
+    logger.log(level, "HTTP {} {} | status={} elapsed_ms={}", method, url, status_code, elapsed_fmt)
 
 
 def log_retry(
@@ -108,14 +114,11 @@ def log_retry(
 ) -> None:
     """Log a retry attempt."""
 
-    logger.warning(
-        f"Retry {attempt}/{max_attempts} | "
-        f"exception={type(exception).__name__ if exception else 'None'} "
-        f"wait={wait_seconds:.2f}s"
-    )
+    exc_name = type(exception).__name__ if exception else "None"
+    logger.warning("Retry {}/{} | exception={} wait={:.2f}s", attempt, max_attempts, exc_name, wait_seconds)
 
 
 def log_error(error: Exception, context: str = "") -> None:
     """Log an error with traceback."""
 
-    logger.exception(f"Error | context={context} type={type(error).__name__} message={error}")
+    logger.exception("Error | context={} type={} message={}", context, type(error).__name__, error)

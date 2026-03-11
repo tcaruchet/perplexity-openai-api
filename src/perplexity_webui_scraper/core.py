@@ -23,6 +23,8 @@ from .constants import (
     CITATION_PATTERN,
     ENDPOINT_UPLOAD,
     JSON_OBJECT_PATTERN,
+    MAX_FILE_SIZE,
+    MAX_FILES,
     PROMPT_SOURCE,
     SEND_BACK_TEXT,
     USE_SCHEMATIZED_API,
@@ -30,13 +32,14 @@ from .constants import (
 from .enums import CitationMode
 from .exceptions import FileUploadError, FileValidationError, ResearchClarifyingQuestionsError, ResponseParsingError
 from .http import HTTPClient
-from .limits import MAX_FILE_SIZE, MAX_FILES
 from .logging import configure_logging, get_logger
-from .models import Model, Models
-from .types import Response, SearchResultItem, _FileInfo
+from .models import Model, _resolve_model
+from .types import FileInput, Response, SearchResultItem, _FileInfo
 
 
 logger = get_logger(__name__)
+
+_DEFAULT_MODEL: str = "best"
 
 
 class Perplexity:
@@ -81,7 +84,7 @@ class Perplexity:
     def __enter__(self) -> Perplexity:
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.close()
 
 
@@ -142,30 +145,33 @@ class Conversation:
     def __iter__(self) -> Generator[Response, None, None]:
         if self._stream_generator is not None:
             yield from self._stream_generator
+
             self._stream_generator = None
 
     def ask(
         self,
         query: str,
-        model: Model | None = None,
-        files: list[str | PathLike] | None = None,
+        model: str | None = None,
+        files: list[FileInput] | None = None,
         citation_mode: CitationMode | None = None,
         stream: bool = False,
     ) -> Conversation:
         """Ask a question. Returns self for method chaining or streaming iteration."""
 
-        effective_model = model or self._config.model or Models.BEST
+        model_id = model or self._config.model or _DEFAULT_MODEL
+        effective_model = _resolve_model(model_id)
         effective_citation = citation_mode if citation_mode is not None else self._config.citation_mode
         self._citation_mode = effective_citation
 
         self._execute(query, effective_model, files, stream=stream)
+
         return self
 
     def _execute(
         self,
         query: str,
         model: Model,
-        files: list[str | PathLike] | None,
+        files: list[FileInput] | None,
         stream: bool = False,
     ) -> None:
         """Execute a query."""
@@ -173,6 +179,7 @@ class Conversation:
         self._reset_response_state()
 
         file_urls: list[str] = []
+
         if files:
             validated = self._validate_files(files)
             file_urls = [self._upload_file(f) for f in validated]
@@ -193,74 +200,125 @@ class Conversation:
         self._raw_data = {}
         self._stream_generator = None
 
-    def _validate_files(self, files: list[str | PathLike] | None) -> list[_FileInfo]:
+    def _validate_files(self, files: list[FileInput] | None) -> list[_FileInfo]:
         if not files:
             return []
 
-        seen: set[str] = set()
-        file_list: list[Path] = []
-
-        for item in files:
-            if item and isinstance(item, (str, PathLike)):
-                path = Path(item).resolve()
-                if path.as_posix() not in seen:
-                    seen.add(path.as_posix())
-                    file_list.append(path)
-
-        if len(file_list) > MAX_FILES:
+        if len(files) > MAX_FILES:
             raise FileValidationError(
-                str(file_list[0]),
-                f"Too many files: {len(file_list)}. Maximum allowed is {MAX_FILES}.",
+                repr(files[0]),
+                f"Too many files: {len(files)}. Maximum allowed is {MAX_FILES}.",
             )
 
         result: list[_FileInfo] = []
+        seen_paths: set[str] = set()
 
-        for path in file_list:
-            file_path = path.as_posix()
+        for item in files:
+            if isinstance(item, bytes):
+                data = item
+                filename = "file"
+                mimetype = "application/octet-stream"
+                size = len(data)
 
-            try:
-                if not path.exists():
-                    raise FileValidationError(file_path, "File not found")
-                if not path.is_file():
-                    raise FileValidationError(file_path, "Path is not a file")
-
-                file_size = path.stat().st_size
-
-                if file_size > MAX_FILE_SIZE:
+                if size == 0:
+                    raise FileValidationError("<bytes>", "Bytes data is empty")
+                if size > MAX_FILE_SIZE:
                     raise FileValidationError(
-                        file_path,
-                        f"File exceeds 50MB limit: {file_size / (1024 * 1024):.1f}MB",
+                        "<bytes>",
+                        f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
                     )
-                if file_size == 0:
-                    raise FileValidationError(file_path, "File is empty")
 
-                mimetype, _ = guess_type(file_path)
-                mimetype = mimetype or "application/octet-stream"
+                result.append(_FileInfo(filename=filename, size=size, mimetype=mimetype, is_image=False, data=data))
+
+                continue
+            if isinstance(item, tuple):
+                if len(item) == 2:
+                    data, filename = item
+                    guessed, _ = guess_type(filename)
+                    mimetype = guessed or "application/octet-stream"
+                elif len(item) == 3:
+                    data, filename, mimetype = item
+                else:
+                    raise FileValidationError(
+                        repr(item),
+                        "Tuple must have 2 or 3 elements: (bytes, filename[, mimetype])",
+                    )
+
+                size = len(data)
+
+                if size == 0:
+                    raise FileValidationError(filename, "Bytes data is empty")
+                if size > MAX_FILE_SIZE:
+                    raise FileValidationError(
+                        filename,
+                        f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
+                    )
 
                 result.append(
                     _FileInfo(
-                        path=file_path,
-                        size=file_size,
+                        filename=filename,
+                        size=size,
                         mimetype=mimetype,
                         is_image=mimetype.startswith("image/"),
+                        data=data,
                     )
                 )
-            except FileValidationError as error:
-                raise error
+
+                continue
+            if not isinstance(item, (str, PathLike)):
+                raise FileValidationError(repr(item), "Unsupported file input type")
+
+            path = Path(item).resolve()
+            posix = path.as_posix()
+
+            if posix in seen_paths:
+                continue
+
+            seen_paths.add(posix)
+
+            if not path.exists():
+                raise FileValidationError(posix, "File not found")
+            if not path.is_file():
+                raise FileValidationError(posix, "Path is not a file")
+
+            try:
+                file_size = path.stat().st_size
             except (FileNotFoundError, PermissionError) as error:
-                raise FileValidationError(file_path, f"Cannot access file: {error}") from error
+                raise FileValidationError(posix, f"Cannot access file: {error}") from error
             except OSError as error:
-                raise FileValidationError(file_path, f"File system error: {error}") from error
+                raise FileValidationError(posix, f"File system error: {error}") from error
+
+            if file_size > MAX_FILE_SIZE:
+                raise FileValidationError(
+                    posix,
+                    f"File exceeds 50MB limit: {file_size / (1024 * 1024):.1f}MB",
+                )
+            if file_size == 0:
+                raise FileValidationError(posix, "File is empty")
+
+            guessed, _ = guess_type(posix)
+            mimetype = guessed or "application/octet-stream"
+
+            result.append(
+                _FileInfo(
+                    filename=path.name,
+                    size=file_size,
+                    mimetype=mimetype,
+                    is_image=mimetype.startswith("image/"),
+                    path=posix,
+                )
+            )
 
         return result
 
     def _upload_file(self, file_info: _FileInfo) -> str:
         file_uuid = str(uuid4())
+        display_name = file_info.filename
 
         json_data = {
             "files": {
                 file_uuid: {
-                    "filename": file_info.path,
+                    "filename": display_name,
                     "content_type": file_info.mimetype,
                     "source": "default",
                     "file_size": file_info.size,
@@ -279,13 +337,11 @@ class Conversation:
             fields = result.get("fields", {})
 
             if not s3_object_url:
-                raise FileUploadError(file_info.path, "No upload URL returned")
+                raise FileUploadError(display_name, "No upload URL returned")
             if not s3_bucket_url or not fields:
-                raise FileUploadError(file_info.path, "Missing S3 upload credentials")
+                raise FileUploadError(display_name, "Missing S3 upload credentials")
 
-            file_path = Path(file_info.path)
-            with file_path.open("rb") as f:
-                file_content = f.read()
+            file_content = file_info.data if file_info.data is not None else Path(file_info.path).read_bytes()
 
             mime = CurlMime()
 
@@ -295,7 +351,7 @@ class Conversation:
             mime.addpart(
                 name="file",
                 content_type=file_info.mimetype,
-                filename=file_path.name,
+                filename=display_name,
                 data=file_content,
             )
 
@@ -306,15 +362,16 @@ class Conversation:
 
             if upload_response.status_code not in (200, 201, 204):
                 raise FileUploadError(
-                    file_info.path,
+                    display_name,
                     f"S3 upload failed with status {upload_response.status_code}: {upload_response.text}",
                 )
 
-            return s3_object_url
-        except FileUploadError as error:
-            raise error
+        except FileUploadError:
+            raise
         except Exception as error:
-            raise FileUploadError(file_info.path, str(error)) from error
+            raise FileUploadError(display_name, str(error)) from error
+
+        return s3_object_url
 
     def _build_payload(
         self,
@@ -357,6 +414,7 @@ class Conversation:
         if self._backend_uuid is not None:
             params["last_backend_uuid"] = self._backend_uuid
             params["query_source"] = "followup"
+
             if self._read_write_token:
                 params["read_write_token"] = self._read_write_token
 
@@ -368,6 +426,7 @@ class Conversation:
 
         def replacer(m: Match[str]) -> str:
             num = m.group(1)
+
             if not num.isdigit():
                 return m.group(0)
 
@@ -375,8 +434,10 @@ class Conversation:
                 return ""
 
             idx = int(num) - 1
+
             if 0 <= idx < len(self._search_results):
                 url = self._search_results[idx].url or ""
+
                 if self._citation_mode == CitationMode.MARKDOWN and url:
                     return f"[{num}]({url})"
 
@@ -397,16 +458,12 @@ class Conversation:
 
         if "backend_uuid" in data:
             self._backend_uuid = data["backend_uuid"]
-
         if "read_write_token" in data:
             self._read_write_token = data["read_write_token"]
-
         if data.get("thread_title"):
             self._title = data["thread_title"]
-
         if "text" not in data and "blocks" not in data:
-            return None
-
+            return
         if data.get("status") == "FAILED":
             raise ResponseParsingError(
                 f"Query processing failed: {data.get('text', 'Unknown error')}",
@@ -429,6 +486,7 @@ class Conversation:
 
                 if step_type == "RESEARCH_CLARIFYING_QUESTIONS":
                     questions = self._extract_clarifying_questions(item)
+
                     raise ResearchClarifyingQuestionsError(questions)
 
                 if step_type == "FINAL":
@@ -442,6 +500,7 @@ class Conversation:
 
                     title = data.get("thread_title") or answer_data.get("thread_title")
                     self._update_state(title, answer_data)
+
                     break
 
         elif isinstance(json_data, dict):
@@ -463,20 +522,20 @@ class Conversation:
         if isinstance(content, dict):
             if "questions" in content:
                 raw_questions = content["questions"]
+
                 if isinstance(raw_questions, list):
                     questions = [str(q) for q in raw_questions if q]
             elif "clarifying_questions" in content:
                 raw_questions = content["clarifying_questions"]
+
                 if isinstance(raw_questions, list):
                     questions = [str(q) for q in raw_questions if q]
             elif not questions:
                 for value in content.values():
                     if isinstance(value, str) and "?" in value:
                         questions.append(value)
-
         elif isinstance(content, list):
             questions = [str(q) for q in content if q]
-
         elif isinstance(content, str):
             questions = [content]
 
@@ -487,6 +546,7 @@ class Conversation:
             self._title = title
 
         web_results = answer_data.get("web_results", [])
+
         if web_results:
             self._search_results = [
                 SearchResultItem(
@@ -499,10 +559,12 @@ class Conversation:
             ]
 
         answer_text = answer_data.get("answer")
+
         if answer_text is not None:
             self._answer = self._format_citations(answer_text)
 
         chunks = answer_data.get("chunks", [])
+
         if chunks:
             formatted = [self._format_citations(chunk) for chunk in chunks if chunk is not None]
             self._chunks = [c for c in formatted if c is not None]
@@ -523,16 +585,21 @@ class Conversation:
     def _complete(self, payload: dict[str, Any]) -> None:
         for line in self._http.stream_ask(payload):
             data = self._parse_line(line)
+
             if data:
                 self._process_data(data)
+
                 if data.get("final"):
                     break
 
     def _stream(self, payload: dict[str, Any]) -> Generator[Response, None, None]:
         for line in self._http.stream_ask(payload):
             data = self._parse_line(line)
+
             if data:
                 self._process_data(data)
+
                 yield self._build_response()
+
                 if data.get("final"):
                     break

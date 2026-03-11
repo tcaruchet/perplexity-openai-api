@@ -11,16 +11,13 @@ from .enums import CitationMode, LogLevel, SearchFocus, SourceFocus, TimeRange
 
 
 if TYPE_CHECKING:
-    from .models import Model
     from .types import Coordinates
 
 
 class ConversationConfig(BaseModel):
     """Default settings for a conversation."""
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    model: Model | None = None
+    model: str | None = None
     citation_mode: CitationMode = CitationMode.CLEAN
     save_to_library: bool = False
     search_focus: SearchFocus = SearchFocus.WEB

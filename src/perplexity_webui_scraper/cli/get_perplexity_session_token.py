@@ -40,13 +40,14 @@ def update_env(token: str) -> bool:
         if not updated:
             if new_lines and new_lines[-1] != "":
                 new_lines.append("")
+
             new_lines.append(line_entry)
 
         path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-        return True
-
     except Exception:
         return False
+    else:
+        return True
 
 
 def _initialize_session() -> tuple[Session, str]:
@@ -186,10 +187,8 @@ def get_token() -> NoReturn:
             _show_exit_message()
 
             exit(0)
-
         except KeyboardInterrupt:
             exit(0)
-
         except Exception as error:
             console.print(f"\n[bold red]⛔ Error:[/bold red] {error}")
             console.input("[dim]Press ENTER to exit...[/dim]")

@@ -44,3 +44,12 @@ DEFAULT_HEADERS: Final[dict[str, str]] = {
 
 SESSION_COOKIE_NAME: Final[str] = "__Secure-next-auth.session-token"
 """Name of the session cookie used for authentication."""
+
+MAX_FILES: Final[int] = 30
+"""Maximum number of files per prompt."""
+
+MAX_FILE_SIZE: Final[int] = 50 * 1024 * 1024
+"""Maximum file size in bytes (50 MB)."""
+
+DEFAULT_TIMEOUT: Final[int] = 60 * 60
+"""Default request timeout in seconds (1 hour)."""

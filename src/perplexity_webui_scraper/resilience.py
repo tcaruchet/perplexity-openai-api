@@ -1,21 +1,17 @@
-"""Resilience utilities for HTTP requests."""
+"""Resilience utilities: rate limiting and retry logic."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from random import choice
 from threading import Lock
 from time import monotonic, sleep
 from typing import TYPE_CHECKING, TypeVar
 
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential_jitter
+from pydantic import BaseModel, ConfigDict
 
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from tenacity import RetryCallState
-
 
 T = TypeVar("T")
 
@@ -37,9 +33,10 @@ BROWSER_PROFILES: tuple[str, ...] = (
 )
 
 
-@dataclass(slots=True)
-class RetryConfig:
+class RetryConfig(BaseModel):
     """Configuration for retry behavior."""
+
+    model_config = ConfigDict(frozen=True)
 
     max_retries: int = 3
     base_delay: float = 1.0
@@ -47,13 +44,15 @@ class RetryConfig:
     jitter: float = 0.5
 
 
-@dataclass
 class RateLimiter:
     """Token bucket rate limiter."""
 
-    requests_per_second: float = 0.5
-    _last_request: float = field(default=0.0, init=False)
-    _lock: Lock = field(default_factory=Lock, init=False)
+    __slots__ = ("_last_request", "_lock", "requests_per_second")
+
+    def __init__(self, requests_per_second: float = 0.5) -> None:
+        self.requests_per_second = requests_per_second
+        self._last_request: float = 0.0
+        self._lock = Lock()
 
     def acquire(self) -> None:
         """Wait until a request can be made within rate limits."""
@@ -78,21 +77,54 @@ def get_random_browser_profile() -> str:
     return choice(BROWSER_PROFILES)
 
 
-def create_retry_decorator(
+def retry_with_backoff(
+    fn: Callable[[], T],
     config: RetryConfig,
-    retryable_exceptions: tuple[type[Exception], ...],
-    on_retry: Callable[[RetryCallState], None] | None = None,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Create a tenacity retry decorator with the given configuration."""
+    on_retry: Callable[[int, BaseException, float], None] | None = None,
+    retryable: tuple[type[BaseException], ...] = (),
+) -> T:
+    """Execute *fn* with exponential-backoff retry.
 
-    return retry(
-        stop=stop_after_attempt(config.max_retries + 1),
-        wait=wait_exponential_jitter(
-            initial=config.base_delay,
-            max=config.max_delay,
-            jitter=config.max_delay * config.jitter,
-        ),
-        retry=retry_if_exception_type(retryable_exceptions),
-        before_sleep=on_retry,
-        reraise=True,
-    )
+    Args:
+        fn: Zero-argument callable to execute.
+        config: Retry configuration.
+        on_retry: Optional callback invoked before each retry with (attempt, exception, wait_seconds).
+        retryable: Exception types that trigger a retry.
+
+    Returns:
+        The return value of *fn* on success.
+
+    Raises:
+        The last exception if all attempts are exhausted.
+    """
+
+    last_exc: BaseException | None = None
+    max_attempts = config.max_retries + 1
+
+    for attempt in range(1, max_attempts + 1):
+        exc: BaseException | None = None
+
+        try:
+            return fn()
+        except BaseException as _exc:
+            exc = _exc
+
+        if exc is not None:
+            if retryable and not isinstance(exc, retryable):
+                raise exc
+
+            last_exc = exc
+
+            if attempt >= max_attempts:
+                break
+
+            delay = min(config.base_delay * (2 ** (attempt - 1)), config.max_delay)
+            jitter_amount = delay * config.jitter
+            wait = max(0.0, delay + jitter_amount * (2 * (monotonic() % 1) - 1))
+
+            if on_retry is not None:
+                on_retry(attempt, exc, wait)
+
+            sleep(wait)
+
+    raise last_exc  # type: ignore[misc]

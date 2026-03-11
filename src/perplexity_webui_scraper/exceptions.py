@@ -21,6 +21,7 @@ class PerplexityError(Exception):
 
     def __init__(self, message: str) -> None:
         self.message = message
+
         super().__init__(message)
 
 
@@ -37,6 +38,7 @@ class HTTPError(PerplexityError):
         self.status_code = status_code
         self.url = url
         self.response_body = response_body[:500] if response_body and len(response_body) > 500 else response_body
+
         super().__init__(message)
 
     def __repr__(self) -> str:
@@ -68,6 +70,7 @@ class FileUploadError(PerplexityError):
 
     def __init__(self, file_path: str, reason: str) -> None:
         self.file_path = file_path
+
         super().__init__(f"Upload failed for '{file_path}': {reason}")
 
 
@@ -76,6 +79,7 @@ class FileValidationError(PerplexityError):
 
     def __init__(self, file_path: str, reason: str) -> None:
         self.file_path = file_path
+
         super().__init__(f"File validation failed for '{file_path}': {reason}")
 
 
@@ -85,6 +89,7 @@ class ResearchClarifyingQuestionsError(PerplexityError):
     def __init__(self, questions: list[str]) -> None:
         self.questions = questions
         questions_text = "\n".join(f"  - {q}" for q in questions) if questions else "  (none)"
+
         super().__init__(
             f"Research mode requires clarification:\n{questions_text}\nPlease rephrase your query to be more specific."
         )
@@ -95,6 +100,7 @@ class ResponseParsingError(PerplexityError):
 
     def __init__(self, message: str, raw_data: str | None = None) -> None:
         self.raw_data = raw_data
+
         super().__init__(f"Failed to parse API response: {message}")
 
 

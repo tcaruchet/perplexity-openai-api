@@ -10,7 +10,7 @@ from fastmcp import FastMCP
 from perplexity_webui_scraper.config import ClientConfig, ConversationConfig
 from perplexity_webui_scraper.core import Perplexity
 from perplexity_webui_scraper.enums import CitationMode, SearchFocus, SourceFocus
-from perplexity_webui_scraper.models import Model, Models
+from perplexity_webui_scraper.models import MODELS
 
 
 mcp = FastMCP(
@@ -22,7 +22,7 @@ mcp = FastMCP(
     ),
 )
 
-SOURCE_FOCUS_MAP = {
+SOURCE_FOCUS_MAP: dict[str, list[SourceFocus]] = {
     "web": [SourceFocus.WEB],
     "academic": [SourceFocus.ACADEMIC],
     "social": [SourceFocus.SOCIAL],
@@ -44,17 +44,19 @@ def _get_client() -> Perplexity:
         token = environ.get("PERPLEXITY_SESSION_TOKEN", "")
 
         if not token:
-            raise ValueError(
+            msg = (
                 "PERPLEXITY_SESSION_TOKEN environment variable is required. "
                 "Set it with: export PERPLEXITY_SESSION_TOKEN='your_token_here'"
             )
+
+            raise ValueError(msg)
 
         _client = Perplexity(token, config=ClientConfig())
 
     return _client
 
 
-def _ask(query: str, model: Model, source_focus: SourceFocusName = "web") -> str:
+def _ask(query: str, model_id: str, source_focus: SourceFocusName = "web") -> str:
     """Execute a query with a specific model."""
 
     client = _get_client()
@@ -63,7 +65,7 @@ def _ask(query: str, model: Model, source_focus: SourceFocusName = "web") -> str
     try:
         conversation = client.create_conversation(
             ConversationConfig(
-                model=model,
+                model=model_id,
                 citation_mode=CitationMode.DEFAULT,
                 search_focus=SearchFocus.WEB,
                 source_focus=sources,
@@ -83,24 +85,25 @@ def _ask(query: str, model: Model, source_focus: SourceFocusName = "web") -> str
                 response_parts.append(f"\n[{i}]: {url}")
 
         return "".join(response_parts)
-
     except Exception as error:
         return f"Error: {error!s}"
 
 
-def _create_tool_function(model: Model) -> None:
+def _create_tool_function(model_id: str) -> None:
     """Dynamically create and register a tool for a model."""
+
+    model = MODELS[model_id]
 
     @mcp.tool(name=model.tool_name, description=f"{model.name} - {model.description}")
     def tool_fn(query: str, source_focus: SourceFocusName = "web") -> str:
-        return _ask(query, model, source_focus)
+        return _ask(query, model_id, source_focus)
 
 
 def _register_all_tools() -> None:
     """Register all model tools dynamically."""
 
-    for model in Models.all():
-        _create_tool_function(model)
+    for model_id in MODELS:
+        _create_tool_function(model_id)
 
 
 _register_all_tools()

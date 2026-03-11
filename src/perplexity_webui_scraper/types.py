@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from os import PathLike
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
+
+
+# Type alias for accepted file inputs in ask():
+#   - str | PathLike[str]          → local file path
+#   - bytes                         → raw bytes (filename defaults to "file", mimetype auto-detected or octet-stream)
+#   - tuple[bytes, str]             → (data, filename)         — mimetype guessed from filename
+#   - tuple[bytes, str, str]        → (data, filename, mimetype)
+FileInput = str | PathLike[str] | bytes | tuple[bytes, str] | tuple[bytes, str, str]
 
 
 class Coordinates(BaseModel):
@@ -39,11 +47,19 @@ class Response(BaseModel):
     raw_data: dict[str, Any] = {}
 
 
-@dataclass(frozen=True, slots=True)
-class _FileInfo:
-    """Internal file info for uploads."""
+class _FileInfo(BaseModel):
+    """Internal file info for uploads.
 
-    path: str
+    Exactly one of ``path`` or ``data`` is set:
+    - ``path`` — source filesystem path (bytes read lazily at upload time)
+    - ``data`` — in-memory bytes (no filesystem access needed)
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    filename: str
     size: int
     mimetype: str
     is_image: bool
+    path: str | None = None
+    data: bytes | None = None

@@ -16,8 +16,8 @@ from .exceptions import (
     ResponseParsingError,
     StreamingError,
 )
-from .models import Model, Models
-from .types import Coordinates, Response, SearchResultItem
+from .models import MODELS, Model
+from .types import Coordinates, FileInput, Response, SearchResultItem
 
 
 ConversationConfig.model_rebuild()
@@ -25,18 +25,19 @@ ConversationConfig.model_rebuild()
 
 __version__: str = metadata.version("perplexity-webui-scraper")
 __all__: list[str] = [
+    "MODELS",
     "AuthenticationError",
     "CitationMode",
     "ClientConfig",
     "Conversation",
     "ConversationConfig",
     "Coordinates",
+    "FileInput",
     "FileUploadError",
     "FileValidationError",
     "HTTPError",
     "LogLevel",
     "Model",
-    "Models",
     "Perplexity",
     "PerplexityError",
     "RateLimitError",

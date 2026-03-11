@@ -2,210 +2,153 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import ClassVar
+from pydantic import BaseModel, ConfigDict
 
 
-@dataclass(frozen=True, slots=True)
-class Model:
+class Model(BaseModel):
     """AI model configuration with metadata."""
 
-    identifier: str
+    model_config = ConfigDict(frozen=True)
+
     name: str
     description: str
     tool_name: str
+    identifier: str
+    subscription_tier: str
     mode: str = "copilot"
-    subscription_tier: str = "pro"
 
 
-class Models:
-    """Available AI models.
-
-    Most models require 'copilot' mode (Pro Search) to function correctly
-    with specific identifiers.
-    """
-
-    BEST: ClassVar[Model] = Model(
+MODELS: dict[str, Model] = {
+    "best": Model(
         identifier="default",
         name="Pro",
         description="Automatically selects the most responsive model based on the query",
         mode="search",
         subscription_tier="pro",
         tool_name="pplx_ask",
-    )
-
-    DEEP_RESEARCH: ClassVar[Model] = Model(
+    ),
+    "deep-research": Model(
         identifier="pplx_alpha",
         name="Deep research",
         description="Fast and thorough for routine research",
         mode="research",
         subscription_tier="pro",
         tool_name="pplx_deep_research",
-    )
-
-    SONAR: ClassVar[Model] = Model(
+    ),
+    "sonar": Model(
         identifier="experimental",
         name="Sonar",
         description="Perplexity's latest model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_sonar",
-    )
-
-    GEMINI_3_FLASH: ClassVar[Model] = Model(
+    ),
+    "gemini-3-flash": Model(
         identifier="gemini30flash",
         name="Gemini 3 Flash",
         description="Google's fast model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_gemini_flash",
-    )
-
-    GEMINI_3_FLASH_THINKING: ClassVar[Model] = Model(
+    ),
+    "gemini-3-flash-thinking": Model(
         identifier="gemini30flash_high",
         name="Gemini 3 Flash Thinking",
-        description="Google's fast model",
-        mode="copilot",
+        description="Google's fast model with thinking",
         subscription_tier="pro",
         tool_name="pplx_gemini_flash_think",
-    )
-
-    GEMINI_31_PRO: ClassVar[Model] = Model(
+    ),
+    "gemini-3.1-pro": Model(
         identifier="gemini31pro_low",
         name="Gemini 3.1 Pro",
         description="Google's latest model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_gemini31_pro",
-    )
-
-    GEMINI_31_PRO_THINKING: ClassVar[Model] = Model(
+    ),
+    "gemini-3.1-pro-thinking": Model(
         identifier="gemini31pro_high",
         name="Gemini 3.1 Pro Thinking",
         description="Google's latest model with thinking",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_gemini31_pro_think",
-    )
-
-    GPT_54: ClassVar[Model] = Model(
+    ),
+    "gpt-5.4": Model(
         identifier="gpt54",
         name="GPT-5.4",
         description="OpenAI's latest model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_gpt54",
-    )
-
-    GPT_54_THINKING: ClassVar[Model] = Model(
+    ),
+    "gpt-5.4-thinking": Model(
         identifier="gpt54_thinking",
         name="GPT-5.4 Thinking",
         description="OpenAI's latest model with thinking",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_gpt54_thinking",
-    )
-
-    CLAUDE_46_SONNET: ClassVar[Model] = Model(
+    ),
+    "claude-sonnet-4.6": Model(
         identifier="claude46sonnet",
         name="Claude Sonnet 4.6",
         description="Anthropic's fast model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_claude_s46",
-    )
-
-    CLAUDE_46_SONNET_THINKING: ClassVar[Model] = Model(
+    ),
+    "claude-sonnet-4.6-thinking": Model(
         identifier="claude46sonnetthinking",
         name="Claude Sonnet 4.6 Thinking",
         description="Anthropic's newest reasoning model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_claude_s46_think",
-    )
-
-    CLAUDE_46_OPUS: ClassVar[Model] = Model(
+    ),
+    "claude-opus-4.6": Model(
         identifier="claude46opus",
         name="Claude Opus 4.6",
         description="Anthropic's most advanced model",
-        mode="copilot",
         subscription_tier="max",
         tool_name="pplx_claude_o46",
-    )
-
-    CLAUDE_46_OPUS_THINKING: ClassVar[Model] = Model(
+    ),
+    "claude-opus-4.6-thinking": Model(
         identifier="claude46opusthinking",
         name="Claude Opus 4.6 Thinking",
         description="Anthropic's Opus reasoning model with thinking",
-        mode="copilot",
         subscription_tier="max",
         tool_name="pplx_claude_o46_think",
-    )
-
-    GROK_41: ClassVar[Model] = Model(
+    ),
+    "grok-4.1": Model(
         identifier="grok41nonreasoning",
         name="Grok 4.1",
         description="xAI's latest model",
-        mode="copilot",
         subscription_tier="pro",
         tool_name="pplx_grok41",
-    )
-
-    GROK_41_THINKING: ClassVar[Model] = Model(
+    ),
+    "grok-4.1-thinking": Model(
         identifier="grok41reasoning",
         name="Grok 4.1 Thinking",
-        description="xAI's latest model",
-        mode="copilot",
+        description="xAI's latest model with thinking",
         subscription_tier="pro",
         tool_name="pplx_grok41_think",
-    )
-
-    KIMI_K25_THINKING: ClassVar[Model] = Model(
+    ),
+    "kimi-k2.5-thinking": Model(
         identifier="kimik25thinking",
-        name="Kimi K2.5",
-        description="Moonshot AI's latest model",
-        mode="copilot",
+        name="Kimi K2.5 Thinking",
+        description="Moonshot AI's latest model with thinking",
         subscription_tier="pro",
         tool_name="pplx_kimi_k25_think",
-    )
+    ),
+}
 
-    @classmethod
-    def all(cls) -> list[Model]:
-        """Return all available models."""
 
-        return [
-            cls.BEST,
-            cls.DEEP_RESEARCH,
-            cls.SONAR,
-            cls.GEMINI_3_FLASH,
-            cls.GEMINI_3_FLASH_THINKING,
-            cls.GEMINI_31_PRO,
-            cls.GEMINI_31_PRO_THINKING,
-            cls.GPT_54,
-            cls.GPT_54_THINKING,
-            cls.CLAUDE_46_SONNET,
-            cls.CLAUDE_46_SONNET_THINKING,
-            cls.CLAUDE_46_OPUS,
-            cls.CLAUDE_46_OPUS_THINKING,
-            cls.GROK_41,
-            cls.GROK_41_THINKING,
-            cls.KIMI_K25_THINKING,
-        ]
+def _resolve_model(model_id: str) -> Model:
+    """Resolve a model string ID to a Model instance.
 
-    @classmethod
-    def generate_markdown_table(cls) -> str:
-        """Generate markdown table for README."""
+    Raises:
+        ValueError: If the model ID is not recognized.
+    """
 
-        lines = [
-            "| Model | Description | Tier |",
-            "| ----- | ----------- | ---- |",
-        ]
+    model = MODELS.get(model_id)
 
-        for model in cls.all():
-            attr_name = next(
-                (name for name, val in vars(cls).items() if val is model),
-                model.tool_name.upper(),
-            )
-            lines.append(f"| `Models.{attr_name}` | {model.name} - {model.description} | {model.subscription_tier} |")
+    if model is None:
+        available = ", ".join(f'"{k}"' for k in MODELS)
+        msg = f"Unknown model {model_id!r}. Available models: {available}"
 
-        return "\n".join(lines)
+        raise ValueError(msg)
+
+    return model
