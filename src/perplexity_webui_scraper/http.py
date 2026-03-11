@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from typing import TYPE_CHECKING, Any
 
 from curl_cffi.requests import Response as CurlResponse
@@ -67,20 +69,40 @@ class HTTPClient:
         """
 
         status_code = None
+        response_text = None
 
         if hasattr(error, "response") and error.response is not None:
             status_code = getattr(error.response, "status_code", None)
+            try:
+                response_text = getattr(error.response, "text", None)
+            except Exception:
+                response_text = None
 
         if status_code == 403:
             raise AuthenticationError() from error
         elif status_code == 429:
             raise RateLimitError() from error
         elif status_code is not None:
-            raise PerplexityError(f"{context}HTTP {status_code}: {error!s}", status_code=status_code) from error
+            body_snippet = ""
+            if isinstance(response_text, str) and response_text:
+                # Avoid noisy logs / huge HTML payloads.
+                snippet = response_text.strip().replace("\n", " ")
+                if len(snippet) > 300:
+                    snippet = snippet[:300] + "…"
+                body_snippet = f" Body: {snippet}"
+            raise PerplexityError(
+                f"{context}HTTP {status_code}: {error!s}{body_snippet}",
+                status_code=status_code,
+            ) from error
         else:
             raise PerplexityError(f"{context}{error!s}") from error
 
-    def get(self, endpoint: str, params: dict[str, Any] | None = None) -> CurlResponse:
+    def get(
+        self,
+        endpoint: str,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> CurlResponse:
         """Make a GET request.
 
         Args:
@@ -99,7 +121,7 @@ class HTTPClient:
         url = f"{API_BASE_URL}{endpoint}" if endpoint.startswith("/") else endpoint
 
         try:
-            response = self._session.get(url, params=params)
+            response = self._session.get(url, params=params, headers=headers)
             response.raise_for_status()
             return response
         except Exception as e:
@@ -168,7 +190,29 @@ class HTTPClient:
             query: The search query.
         """
 
-        self.get(ENDPOINT_SEARCH_INIT, params={"q": query})
+        # Perplexity frequently tweaks the `/search/new` route behavior.
+        # Historically, calling this first helped establish a "search session",
+        # but the SSE endpoint often works even if this route rejects the request.
+        #
+        # Also, `/search/new` is a Next.js route (HTML), so sending API-ish headers
+        # (e.g. `Accept: text/event-stream`) can trigger a 400 on some deployments.
+        init_headers = {
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        }
+
+        # Try the historical behavior first.
+        try:
+            self.get(ENDPOINT_SEARCH_INIT, params={"q": query}, headers=init_headers)
+            return
+        except PerplexityError as e:
+            logging.debug("init_search rejected (with q param): %s", e)
+
+        # Some variants reject the `q` param; try without it.
+        try:
+            self.get(ENDPOINT_SEARCH_INIT, params=None, headers=init_headers)
+        except PerplexityError as e:
+            # Best effort: do not block the actual SSE request.
+            logging.warning("init_search failed (continuing anyway): %s", e)
 
     def stream_ask(self, payload: dict[str, Any]) -> Generator[bytes, None, None]:
         """Stream a prompt request to the ask endpoint.

@@ -1,22 +1,12 @@
 default:
     @just --list
 
-# Environment
-install:
-    uv sync --upgrade --all-groups
-
-lock:
-    uv lock
-
-# Quality
-fmt:
-    uv run ruff format .
-
+# Development
 lint:
-    uv run ruff check .
+    uv run ruff check
 
-check: fmt lint
-    python -m py_compile openai_server.py
+format:
+    uv run ruff format
 
 self-test:
     uv run --active python -c "import json; import openai_server; print(json.dumps(openai_server.run_self_test(), ensure_ascii=False, indent=2))"
@@ -54,6 +44,35 @@ docker-restart:
     docker compose restart perplexity-api
 
 release-check: check self-test docker-build
+
+test:
+    uv run pytest -v
+
+# Docker
+build:
+    docker-compose build
+
+up:
+    docker-compose up -d
+
+down:
+    docker-compose down
+
+logs:
+    docker-compose logs -f
+
+restart:
+    docker-compose restart
+
+# Server
+run:
+    python openai_server.py
+
+health:
+    curl -s http://localhost:8000/health | python -m json.tool
+
+models:
+    curl -s http://localhost:8000/v1/models | python -m json.tool
 
 # Setup
 setup:

@@ -1,7 +1,5 @@
 ### dotenv ###
 .env
-.env.*
-!.env.example
 
 ### Linux ###
 *~
@@ -240,20 +238,6 @@ pip-selfcheck.json
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-
-# Project-specific production hygiene
-*.tmp
-*.temp
-*.bak
-*.swp
-*.swo
-
-# Local runtime artifacts
-logs/
-*.pid
-
-# Local tool caches
-uv-cache/
 !.vscode/*.code-snippets
 
 # Local History for Visual Studio Code
