@@ -14,6 +14,7 @@ from .exceptions import (
 )
 from .models import Model, Models
 from .types import Coordinates, Response, SearchResultItem
+from .fetch_models import PerplexityModelsFetcher, ModelInfo, get_available_models
 
 
 __version__: str = version("perplexity-webui-scraper")
@@ -26,10 +27,13 @@ __all__: list[str] = [
     "Coordinates",
     "FileUploadError",
     "FileValidationError",
+    "get_available_models",
     "Model",
+    "ModelInfo",
     "Models",
     "Perplexity",
     "PerplexityError",
+    "PerplexityModelsFetcher",
     "RateLimitError",
     "Response",
     "SearchFocus",
