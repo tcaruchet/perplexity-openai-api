@@ -35,11 +35,12 @@ dev = [
     "beautifulsoup4>=4.14.3",
     "jsbeautifier>=1.15.4",
     "lxml>=6.0.2",
+    "mkdocs-material>=9.7.5",
     "python-dotenv>=1.2.2",
 ]
 lint = [
-    "ruff>=0.15.5",
-    "ty>=0.0.21",
+    "ruff>=0.15.6",
+    "ty>=0.0.23",
 ]
 
 [project.optional-dependencies]

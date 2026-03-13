@@ -1,0 +1,36 @@
+name: Deploy MkDocs Documentation
+
+on:
+  push:
+    branches:
+      - prod
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - "README.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up uv and Python
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "latest"
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install MkDocs Material
+        run: uv sync --dev
+
+      - name: Deploy MkDocs to GitHub Pages
+        run: uv run mkdocs gh-deploy --force
