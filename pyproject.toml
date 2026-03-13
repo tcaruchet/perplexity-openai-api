@@ -32,8 +32,11 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "mkdocs-material>=9.7.5",
     "python-dotenv>=1.2.2",
+]
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.5",
 ]
 lint = [
     "ruff>=0.15.6",

@@ -1127,8 +1127,11 @@ mcp = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "mkdocs-material" },
     { name = "python-dotenv" },
+]
+docs = [
+    { name = "mkdocs" },
+    { name = "mkdocs-material" },
 ]
 lint = [
     { name = "ruff" },
@@ -1147,9 +1150,10 @@ requires-dist = [
 provides-extras = ["mcp"]
 
 [package.metadata.requires-dev]
-dev = [
+dev = [{ name = "python-dotenv", specifier = ">=1.2.2" }]
+docs = [
+    { name = "mkdocs", specifier = ">=1.6.1" },
     { name = "mkdocs-material", specifier = ">=9.7.5" },
-    { name = "python-dotenv", specifier = ">=1.2.2" },
 ]
 lint = [
     { name = "ruff", specifier = ">=0.15.6" },
