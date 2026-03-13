@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/icon.png" width="128" alt="Logo">
+
 # Perplexity WebUI Scraper
 
 Python scraper to extract AI responses from [Perplexity's](https://www.perplexity.ai) web interface.

@@ -30,7 +30,7 @@ jobs:
           enable-cache: true
 
       - name: Install MkDocs Material
-        run: uv sync --dev
+        run: uv sync --only-group dev --no-install-project
 
       - name: Deploy MkDocs to GitHub Pages
         run: uv run mkdocs gh-deploy --force
