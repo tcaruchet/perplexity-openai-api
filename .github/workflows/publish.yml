@@ -94,7 +94,6 @@ jobs:
           echo "" >> release_notes.md
 
           for email in $AUTHORS; do
-            # Use GitHub API search to find the user by email (or default to author name if email fails)
             GH_USER=$(curl -s "https://api.github.com/search/users?q=$email" | grep -oP '"login": "\K[^"]+' | head -1)
 
             if [ -n "$GH_USER" ]; then
