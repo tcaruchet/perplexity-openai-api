@@ -1,6 +1,6 @@
 [project]
 name = "perplexity-webui-scraper"
-version = "0.6.1"
+version = "0.6.2"
 description = "Python scraper to extract AI responses from Perplexity's web interface."
 authors = [{ name = "Henrique Moreira", email = "github@henriquecoder.com" }]
 license = "MIT"
