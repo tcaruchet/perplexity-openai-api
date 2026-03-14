@@ -8,8 +8,14 @@
 # From PyPI (stable)
 uv add perplexity-webui-scraper
 
+# With interactive CLI token tool
+uv add perplexity-webui-scraper[cli]
+
 # From GitHub prod branch (latest features and fixes)
 uv add git+https://github.com/henrique-coder/perplexity-webui-scraper.git@prod
+
+# From GitHub prod branch with CLI extra
+uv add "perplexity-webui-scraper[cli] @ git+https://github.com/henrique-coder/perplexity-webui-scraper.git@prod"
 ```
 
 ### As MCP Server
@@ -39,7 +45,14 @@ uv --directory /path/to/perplexity-webui-scraper run perplexity-webui-scraper-mc
 The library includes an interactive tool to fetch your token via email magic link or verification code.
 
 ```bash
+# Using the library if you installed with [cli]
 uv run get-perplexity-session-token
+
+# Running standalone without adding to your project (via uvx)
+uvx --from perplexity-webui-scraper[cli] get-perplexity-session-token
+
+# Running standalone directly from GitHub prod branch
+uvx --from "perplexity-webui-scraper[cli]@git+https://github.com/henrique-coder/perplexity-webui-scraper.git@prod" get-perplexity-session-token
 ```
 
 This interactive tool will:

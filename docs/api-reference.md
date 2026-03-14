@@ -35,24 +35,24 @@ conversation = client.create_conversation(ConversationConfig(model="gpt-5.4"))
 
 ## `Conversation.ask(query, model?, files?, citation_mode?, stream?)`
 
-| Parameter       | Type                      | Default  | Description                  |
-| --------------- | ------------------------- | -------- | ---------------------------- |
-| `query`         | `str`                     | required | The question to ask          |
-| `model`         | `str \| None`             | `"best"` | Model ID string              |
-| `files`         | `list[FileInput] \| None` | `None`   | File attachments             |
-| `citation_mode` | `CitationMode \| None`    | `None`   | Override conversation config |
-| `stream`        | `bool`                    | `False`  | Yield chunks as they arrive  |
+| Parameter       | Type             | Default  | Description                 |
+| --------------- | ---------------- | -------- | --------------------------- | ---------------------------- |
+| `query`         | `str`            | required | The question to ask         |
+| `model`         | `str             | None`    | `"best"`                    | Model ID string              |
+| `files`         | `list[FileInput] | None`    | `None`                      | File attachments             |
+| `citation_mode` | `CitationMode    | None`    | `None`                      | Override conversation config |
+| `stream`        | `bool`           | `False`  | Yield chunks as they arrive |
 
 Returns `self` (the `Conversation`) for method chaining or iteration when streaming.
 
 ### Conversation Properties
 
-| Property         | Type                     | Description                       |
-| ---------------- | ------------------------ | --------------------------------- |
-| `answer`         | `str \| None`            | Full response text                |
-| `title`          | `str \| None`            | Auto-generated conversation title |
-| `search_results` | `list[SearchResultItem]` | Source URLs used in the response  |
-| `uuid`           | `str \| None`            | Conversation backend UUID         |
+| Property         | Type                     | Description                      |
+| ---------------- | ------------------------ | -------------------------------- | --------------------------------- |
+| `answer`         | `str                     | None`                            | Full response text                |
+| `title`          | `str                     | None`                            | Auto-generated conversation title |
+| `search_results` | `list[SearchResultItem]` | Source URLs used in the response |
+| `uuid`           | `str                     | None`                            | Conversation backend UUID         |
 
 ## Models
 
@@ -103,33 +103,33 @@ for model_id, model in MODELS.items():
 
 ### `ConversationConfig`
 
-| Parameter         | Type                               | Default           | Description                                |
-| ----------------- | ---------------------------------- | ----------------- | ------------------------------------------ |
-| `model`           | `str \| None`                      | `None` (`"best"`) | Model ID string                            |
-| `citation_mode`   | `CitationMode`                     | `CLEAN`           | Citation format                            |
-| `save_to_library` | `bool`                             | `False`           | Save conversation to Perplexity library    |
-| `search_focus`    | `SearchFocus`                      | `WEB`             | Search type (`WEB` or `WRITING`)           |
-| `source_focus`    | `SourceFocus \| list[SourceFocus]` | `WEB`             | Source types to prioritize                 |
-| `time_range`      | `TimeRange`                        | `ALL`             | Recency filter for results                 |
-| `language`        | `str`                              | `"en-US"`         | Language for the response                  |
-| `timezone`        | `str \| None`                      | `None`            | IANA timezone (e.g. `"America/Sao_Paulo"`) |
-| `coordinates`     | `Coordinates \| None`              | `None`            | Geographic location (lat/lng)              |
+| Parameter         | Type           | Default            | Description                             |
+| ----------------- | -------------- | ------------------ | --------------------------------------- | ------------------------------------------ |
+| `model`           | `str           | None`              | `None` (`"best"`)                       | Model ID string                            |
+| `citation_mode`   | `CitationMode` | `CLEAN`            | Citation format                         |
+| `save_to_library` | `bool`         | `False`            | Save conversation to Perplexity library |
+| `search_focus`    | `SearchFocus`  | `WEB`              | Search type (`WEB` or `WRITING`)        |
+| `source_focus`    | `SourceFocus   | list[SourceFocus]` | `WEB`                                   | Source types to prioritize                 |
+| `time_range`      | `TimeRange`    | `ALL`              | Recency filter for results              |
+| `language`        | `str`          | `"en-US"`          | Language for the response               |
+| `timezone`        | `str           | None`              | `None`                                  | IANA timezone (e.g. `"America/Sao_Paulo"`) |
+| `coordinates`     | `Coordinates   | None`              | `None`                                  | Geographic location (lat/lng)              |
 
 ### `ClientConfig`
 
-| Parameter               | Type                      | Default    | Description                                 |
-| ----------------------- | ------------------------- | ---------- | ------------------------------------------- |
-| `timeout`               | `int`                     | `3600`     | Request timeout in seconds                  |
-| `impersonate`           | `str`                     | `"chrome"` | Browser fingerprint to impersonate          |
-| `max_retries`           | `int`                     | `3`        | Maximum retry attempts on transient errors  |
-| `retry_base_delay`      | `float`                   | `1.0`      | Initial backoff delay in seconds            |
-| `retry_max_delay`       | `float`                   | `60.0`     | Maximum backoff delay in seconds            |
-| `retry_jitter`          | `float`                   | `0.5`      | Jitter factor for retry delay randomization |
-| `requests_per_second`   | `float`                   | `0.5`      | Rate limit (requests per second)            |
-| `rotate_fingerprint`    | `bool`                    | `True`     | Rotate browser fingerprint on each retry    |
-| `max_init_query_length` | `int`                     | `2000`     | Truncate init query to avoid HTTP 414       |
-| `logging_level`         | `LogLevel`                | `DISABLED` | Log verbosity                               |
-| `log_file`              | `str \| PathLike \| None` | `None`     | Write logs to file instead of stderr        |
+| Parameter               | Type       | Default    | Description                                 |
+| ----------------------- | ---------- | ---------- | ------------------------------------------- | ------ | ------------------------------------ |
+| `timeout`               | `int`      | `3600`     | Request timeout in seconds                  |
+| `impersonate`           | `str`      | `"chrome"` | Browser fingerprint to impersonate          |
+| `max_retries`           | `int`      | `3`        | Maximum retry attempts on transient errors  |
+| `retry_base_delay`      | `float`    | `1.0`      | Initial backoff delay in seconds            |
+| `retry_max_delay`       | `float`    | `60.0`     | Maximum backoff delay in seconds            |
+| `retry_jitter`          | `float`    | `0.5`      | Jitter factor for retry delay randomization |
+| `requests_per_second`   | `float`    | `0.5`      | Rate limit (requests per second)            |
+| `rotate_fingerprint`    | `bool`     | `True`     | Rotate browser fingerprint on each retry    |
+| `max_init_query_length` | `int`      | `2000`     | Truncate init query to avoid HTTP 414       |
+| `logging_level`         | `LogLevel` | `DISABLED` | Log verbosity                               |
+| `log_file`              | `str       | PathLike   | None`                                       | `None` | Write logs to file instead of stderr |
 
 ## Enums
 

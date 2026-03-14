@@ -30,7 +30,14 @@ This library allows you to interact with Perplexity programmatically, start conv
 ### 1. Install
 
 ```bash
+# Minimal installation (core library only)
 uv add perplexity-webui-scraper
+
+# With interactive session token fetcher (`rich` dependency)
+uv add perplexity-webui-scraper[cli]
+
+# With MCP Server support (`fastmcp` dependency)
+uv add perplexity-webui-scraper[mcp]
 ```
 
 ### 2. Basic Example
