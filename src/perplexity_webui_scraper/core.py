@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from mimetypes import guess_type
 from os import PathLike
 from pathlib import Path
@@ -182,7 +183,9 @@ class Conversation:
 
         if files:
             validated = self._validate_files(files)
-            file_urls = [self._upload_file(f) for f in validated]
+
+            with ThreadPoolExecutor() as executor:
+                file_urls = list(executor.map(self._upload_file, validated))
 
         payload = self._build_payload(query, model, file_urls)
         self._http.init_search(query)
@@ -214,100 +217,118 @@ class Conversation:
         seen_paths: set[str] = set()
 
         for item in files:
-            if isinstance(item, bytes):
-                data = item
-                filename = "file"
-                mimetype = "application/octet-stream"
-                size = len(data)
+            match item:
+                case bytes() as data:
+                    filename = "file"
+                    mimetype = "application/octet-stream"
+                    size = len(data)
 
-                if size == 0:
-                    raise FileValidationError("<bytes>", "Bytes data is empty")
-                if size > MAX_FILE_SIZE:
-                    raise FileValidationError(
-                        "<bytes>",
-                        f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
+                    if size == 0:
+                        raise FileValidationError("<bytes>", "Bytes data is empty")
+                    if size > MAX_FILE_SIZE:
+                        raise FileValidationError(
+                            "<bytes>",
+                            f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
+                        )
+
+                    result.append(
+                        _FileInfo(filename=filename, size=size, mimetype=mimetype, is_image=False, data=data)
                     )
 
-                result.append(_FileInfo(filename=filename, size=size, mimetype=mimetype, is_image=False, data=data))
-
-                continue
-            if isinstance(item, tuple):
-                if len(item) == 2:
-                    data, filename = item
+                case (bytes() as data, str() as filename):
                     guessed, _ = guess_type(filename)
                     mimetype = guessed or "application/octet-stream"
-                elif len(item) == 3:
-                    data, filename, mimetype = item
-                else:
+                    size = len(data)
+
+                    if size == 0:
+                        raise FileValidationError(filename, "Bytes data is empty")
+                    if size > MAX_FILE_SIZE:
+                        raise FileValidationError(
+                            filename,
+                            f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
+                        )
+
+                    result.append(
+                        _FileInfo(
+                            filename=filename,
+                            size=size,
+                            mimetype=mimetype,
+                            is_image=mimetype.startswith("image/"),
+                            data=data,
+                        )
+                    )
+
+                case (bytes() as data, str() as filename, str() as mimetype):
+                    size = len(data)
+
+                    if size == 0:
+                        raise FileValidationError(filename, "Bytes data is empty")
+                    if size > MAX_FILE_SIZE:
+                        raise FileValidationError(
+                            filename,
+                            f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
+                        )
+
+                    result.append(
+                        _FileInfo(
+                            filename=filename,
+                            size=size,
+                            mimetype=mimetype,
+                            is_image=mimetype.startswith("image/"),
+                            data=data,
+                        )
+                    )
+
+                case tuple():
                     raise FileValidationError(
                         repr(item),
                         "Tuple must have 2 or 3 elements: (bytes, filename[, mimetype])",
                     )
 
-                size = len(data)
+                case str() | PathLike() as path_input:
+                    path = Path(path_input).resolve()
+                    posix = path.as_posix()
 
-                if size == 0:
-                    raise FileValidationError(filename, "Bytes data is empty")
-                if size > MAX_FILE_SIZE:
-                    raise FileValidationError(
-                        filename,
-                        f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
+                    if posix in seen_paths:
+                        continue
+
+                    seen_paths.add(posix)
+
+                    if not path.exists():
+                        raise FileValidationError(posix, "File not found")
+                    if not path.is_file():
+                        raise FileValidationError(posix, "Path is not a file")
+
+                    try:
+                        file_size = path.stat().st_size
+                    except (FileNotFoundError, PermissionError) as error:
+                        raise FileValidationError(posix, f"Cannot access file: {error}") from error
+                    except OSError as error:
+                        raise FileValidationError(posix, f"File system error: {error}") from error
+
+                    if file_size > MAX_FILE_SIZE:
+                        raise FileValidationError(
+                            posix,
+                            f"File exceeds 50MB limit: {file_size / (1024 * 1024):.1f}MB",
+                        )
+                    if file_size == 0:
+                        raise FileValidationError(posix, "File is empty")
+
+                    guessed, _ = guess_type(posix)
+                    mimetype = guessed or "application/octet-stream"
+
+                    result.append(
+                        _FileInfo(
+                            filename=path.name,
+                            size=file_size,
+                            mimetype=mimetype,
+                            is_image=mimetype.startswith("image/"),
+                            path=posix,
+                        )
                     )
 
-                result.append(
-                    _FileInfo(
-                        filename=filename,
-                        size=size,
-                        mimetype=mimetype,
-                        is_image=mimetype.startswith("image/"),
-                        data=data,
-                    )
-                )
-
-                continue
-            if not isinstance(item, (str, PathLike)):
-                raise FileValidationError(repr(item), "Unsupported file input type")
-
-            path = Path(item).resolve()
-            posix = path.as_posix()
-
-            if posix in seen_paths:
-                continue
-
-            seen_paths.add(posix)
-
-            if not path.exists():
-                raise FileValidationError(posix, "File not found")
-            if not path.is_file():
-                raise FileValidationError(posix, "Path is not a file")
-
-            try:
-                file_size = path.stat().st_size
-            except (FileNotFoundError, PermissionError) as error:
-                raise FileValidationError(posix, f"Cannot access file: {error}") from error
-            except OSError as error:
-                raise FileValidationError(posix, f"File system error: {error}") from error
-
-            if file_size > MAX_FILE_SIZE:
-                raise FileValidationError(
-                    posix,
-                    f"File exceeds 50MB limit: {file_size / (1024 * 1024):.1f}MB",
-                )
-            if file_size == 0:
-                raise FileValidationError(posix, "File is empty")
-
-            guessed, _ = guess_type(posix)
-            mimetype = guessed or "application/octet-stream"
-
-            result.append(
-                _FileInfo(
-                    filename=path.name,
-                    size=file_size,
-                    mimetype=mimetype,
-                    is_image=mimetype.startswith("image/"),
-                    path=posix,
-                )
-            )
+                case _:
+                    raise FileValidationError(repr(item), "Unsupported file input type")
 
         return result
 
@@ -341,7 +362,7 @@ class Conversation:
             if not s3_bucket_url or not fields:
                 raise FileUploadError(display_name, "Missing S3 upload credentials")
 
-            file_content = file_info.data if file_info.data is not None else Path(file_info.path).read_bytes()
+            file_content = file_info.data if file_info.data is not None else Path(str(file_info.path)).read_bytes()
 
             mime = CurlMime()
 

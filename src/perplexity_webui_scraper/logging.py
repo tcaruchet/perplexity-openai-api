@@ -77,7 +77,7 @@ def configure_logging(
 def get_logger(name: str) -> Logger:
     """Get a logger instance bound to the given module name."""
 
-    return logger.bind(module=name)  # type: ignore[return-value]
+    return logger.bind(module=name)
 
 
 def log_request(
