@@ -231,9 +231,7 @@ class Conversation:
                             f"Data exceeds 50MB limit: {size / (1024 * 1024):.1f}MB",
                         )
 
-                    result.append(
-                        _FileInfo(filename=filename, size=size, mimetype=mimetype, is_image=False, data=data)
-                    )
+                    result.append(_FileInfo(filename=filename, size=size, mimetype=mimetype, is_image=False, data=data))
 
                 case (bytes() as data, str() as filename):
                     guessed, _ = guess_type(filename)

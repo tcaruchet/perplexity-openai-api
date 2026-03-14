@@ -128,5 +128,4 @@ def retry_with_backoff(
     if last_exc is not None:
         raise last_exc
 
-    msg = "Retry loop exhausted without raising an exception"
-    raise RuntimeError(msg)
+    raise RuntimeError("Retry loop exhausted without raising an exception")

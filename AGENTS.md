@@ -6,8 +6,8 @@ You are an expert AI agent working on the `perplexity-webui-scraper` repository.
 
 ## 🏗️ Technical Stack & Architecture
 
-- **Host OS:** Fedora Linux (Assume cross-platform compatibility for end-users, but local dev scripts assume Linux).
-- **Core Language:** Python 3.10+ (Current target in CI is 3.14 for bleeding edge, but must uphold `<3.15` and `>=3.10`).
+- **Environment:** Cross-platform (Linux/Windows/macOS).
+- **Core Language:** Python 3.10+ (Current target in CI is 3.14 for bleeding edge).
 - **Dependencies & Package Management:** `uv` is used exclusively. _NEVER use `pip`, `poetry`, etc._
 
 ### Directory Structure
@@ -65,8 +65,7 @@ All code, variables, and internal comments must be written in **American English
 
 ### Code Formatting Practices
 
-- **Linting & Formatting Tools:** `ruff` and `ty`.
-- **Ruff Profile:** Line length is 120, indent width is 4 spaces, using double quotes.
+- **Tools:** Use `ruff` and `ty`. Refer to `pyproject.toml` for strict configurations.
 - **Docstrings:** Use Google-style docstrings. **ALWAYS include a blank line** between the docstring and the code body.
 
   ```python
@@ -108,10 +107,9 @@ Releases are exclusively driven by **`CHANGELOG.md`**.
 2. **Version Bumps:** Adding a new `## [X.Y.Z] - YYYY-MM-DD` header at the top of the changelog triggers the CI/CD pipeline.
 3. **`publish.yml`**:
    - Triggers on modifying `CHANGELOG.md` in the `prod` branch.
-   - Automatically synchronizes the new version into `pyproject.toml`.
-   - Commits the updated `pyproject.toml` back to the repository.
+   - Validates that the versions in `CHANGELOG.md` and `pyproject.toml` match.
    - Publishes the build to PyPI using `uv build` and `uv publish`.
-   - Creates a GitHub release using the exact changelog block. It also auto-generates a collapsible markdown section showing all git commits merged in that release.
+   - Creates a GitHub release using the exact changelog block and auto-generates a collapsible markdown section showing all git commits merged in that release.
 
 ---
 
