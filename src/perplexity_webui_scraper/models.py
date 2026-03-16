@@ -126,12 +126,12 @@ MODELS: dict[str, Model] = {
         subscription_tier="pro",
         tool_name="pplx_grok41_think",
     ),
-    "kimi-k2.5-thinking": Model(
-        identifier="kimik25thinking",
-        name="Kimi K2.5 Thinking",
-        description="Moonshot AI's latest model with thinking",
+    "nv-nemotron-3-super-thinking": Model(
+        identifier="nv_nemotron_3_super",
+        name="Nemotron 3 Super Thinking",
+        description="NVIDIA's Nemotron 3 Super 120B model with thinking",
         subscription_tier="pro",
-        tool_name="pplx_kimi_k25_think",
+        tool_name="pplx_nemotron3_super_think",
     ),
 }
 
