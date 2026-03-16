@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0).
 
+## [0.6.3] - 2026-03-16
+
+### Added
+
+- Added NVIDIA's Nemotron 3 Super Thinking (`nv-nemotron-3-super-thinking`) reasoning model.
+- Introduced `[cli]` optional dependency group for terminal-based utilities.
+- Implemented enhanced GitHub Release body formatting: rounded contributor avatars, open-by-default commit history, and improved paragraph spacing.
+
+### Changed
+
+- Replaced Moonshot AI's `Kimi K2.5 Thinking` with NVIDIA's `Nemotron 3 Super Thinking` in the model catalog.
+- Updated MCP server tool registration: `pplx_kimi_k25_think` is now `pplx_nemotron3_super_think`.
+- Refactored dependencies: moved `rich` to `[cli]` extras to ensure the core library remains lightweight.
+- Standardized all documentation and installation guides to exclusively recommend `uv` and `uvx`.
+
+### Fixed
+
+- Repaired broken Markdown table syntax in `docs/api-reference.md` caused by unescaped union type pipes.
+- Resolved documentation layout issues including misaligned table headers and spacing bugs.
+- Fixed a type-checking edge case in `_upload_file` by explicitly casting paths during content reads.
+
 ## [0.6.2] - 2026-03-13
 
 ### Added
