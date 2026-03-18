@@ -2,45 +2,64 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from os import PathLike
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclass(frozen=True, slots=True)
-class Coordinates:
+
+# Type alias for accepted file inputs in ask():
+#   - str | PathLike[str]          → local file path
+#   - bytes                         → raw bytes (filename defaults to "file", mimetype auto-detected or octet-stream)
+#   - tuple[bytes, str]             → (data, filename)         — mimetype guessed from filename
+#   - tuple[bytes, str, str]        → (data, filename, mimetype)
+FileInput = str | PathLike[str] | bytes | tuple[bytes, str] | tuple[bytes, str, str]
+
+
+class Coordinates(BaseModel):
     """Geographic coordinates (lat/lng)."""
+
+    model_config = ConfigDict(frozen=True)
 
     latitude: float
     longitude: float
 
 
-@dataclass(frozen=True, slots=True)
-class SearchResultItem:
+class SearchResultItem(BaseModel):
     """A single search result."""
+
+    model_config = ConfigDict(frozen=True)
 
     title: str | None = None
     snippet: str | None = None
     url: str | None = None
 
 
-@dataclass(slots=True)
-class Response:
+class Response(BaseModel):
     """Response from Perplexity AI."""
 
     title: str | None = None
     answer: str | None = None
-    chunks: list[str] = field(default_factory=list)
+    chunks: list[str] = []
     last_chunk: str | None = None
-    search_results: list[SearchResultItem] = field(default_factory=list)
+    search_results: list[SearchResultItem] = []
     conversation_uuid: str | None = None
-    raw_data: dict[str, Any] = field(default_factory=dict)
+    raw_data: dict[str, Any] = {}
 
 
-@dataclass(frozen=True, slots=True)
-class _FileInfo:
-    """Internal file info for uploads."""
+class _FileInfo(BaseModel):
+    """Internal file info for uploads.
 
-    path: str
+    Exactly one of ``path`` or ``data`` is set:
+    - ``path`` — source filesystem path (bytes read lazily at upload time)
+    - ``data`` — in-memory bytes (no filesystem access needed)
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    filename: str
     size: int
     mimetype: str
     is_image: bool
+    path: str | None = None
+    data: bytes | None = None

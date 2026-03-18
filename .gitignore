@@ -51,6 +51,10 @@ Temporary Items
 
 ### Python ###
 # Byte-compiled / optimized / DLL files
+# Folders
+.idea/
+.vscode/
+.venv/
 __pycache__/
 *.py[cod]
 *$py.class
@@ -83,11 +87,20 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+site/
+.debug/
 
+# Files
+example*.py
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
 
+# Extensions
+*.env
 # Unit test / coverage reports
 htmlcov/
 .tox/
@@ -109,6 +122,8 @@ cover/
 
 # Django stuff:
 *.log
+*.tmp
+*.bak
 local_settings.py
 db.sqlite3
 db.sqlite3-journal

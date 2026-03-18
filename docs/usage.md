@@ -1,0 +1,82 @@
+# Usage Guide
+
+Once you have your `session_token` stored, you can begin automating conversations.
+
+## Quick Start
+
+```python
+from perplexity_webui_scraper import Perplexity
+
+client = Perplexity(session_token="YOUR_TOKEN")
+conversation = client.create_conversation()
+
+conversation.ask("What is quantum computing?")
+print(conversation.answer)
+
+# Follow-up (context is preserved automatically)
+conversation.ask("Explain it simpler")
+print(conversation.answer)
+```
+
+## Streaming Responses
+
+If you do not want to wait for the entire response to generate before acting on it, you can stream chunks to the terminal simply natively:
+
+```python
+for chunk in conversation.ask("Explain AI", stream=True):
+    if chunk.answer:
+        print(chunk.answer, end="\r")
+```
+
+## With Configuration Options
+
+You can set global parameters or pass specific configurations for individual routines natively:
+
+```python
+from perplexity_webui_scraper import (
+    CitationMode,
+    ConversationConfig,
+    Coordinates,
+    SourceFocus,
+)
+
+config = ConversationConfig(
+    model="deep-research",
+    citation_mode=CitationMode.MARKDOWN,
+    source_focus=[SourceFocus.WEB, SourceFocus.ACADEMIC],
+    language="en-US",
+    coordinates=Coordinates(latitude=12.3456, longitude=-98.7654),
+)
+
+conversation = client.create_conversation(config)
+conversation.ask("Latest AI research", files=["paper.pdf"])
+print(conversation.answer)
+```
+
+## File Attachments (`FileInput`)
+
+The `ask()` method accepts files in multiple formats natively via the `FileInput` protocol:
+
+```python
+from perplexity_webui_scraper import FileInput  # for type annotations
+
+# 1. Local file path (str or Path)
+conversation.ask("Describe this image", files=["photo.jpg"])
+conversation.ask("Summarize this", files=[Path("document.pdf")])
+
+# 2. Raw bytes — filename defaults to "file", mimetype to "application/octet-stream"
+import requests
+image_bytes: bytes = requests.get("https://example.com/image.jpg").content
+conversation.ask("What's in this image?", files=[image_bytes])
+
+# 3. Bytes + filename — mimetype is guessed from the filename extension
+conversation.ask("Analyze this", files=[(image_bytes, "photo.jpg")])
+
+# 4. Bytes + filename + explicit mimetype — full control
+conversation.ask("Read this PDF", files=[(pdf_bytes, "report.pdf", "application/pdf")])
+
+# Mix and match different types in one single call
+conversation.ask("Compare these", files=["local.jpg", (remote_bytes, "remote.png")])
+```
+
+> **Note:** Perplexity accepts up to 30 files per prompt natively in its WebUI logic. Each file has a maximum standard size of 50 MB, however, large text files might block execution natively due to context ceilings. Use appropriately.

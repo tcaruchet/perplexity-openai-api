@@ -1,101 +1,157 @@
-"""HTTP client wrapper for Perplexity API requests."""
+"""HTTP client wrapper."""
 
 from __future__ import annotations
 
+from contextlib import suppress
+from time import monotonic
 import logging
 
 from typing import TYPE_CHECKING, Any
 
 from curl_cffi.requests import Response as CurlResponse
-
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
-
 from curl_cffi.requests import Session
 
 from .constants import (
     API_BASE_URL,
     DEFAULT_HEADERS,
+    DEFAULT_TIMEOUT,
     ENDPOINT_ASK,
     ENDPOINT_SEARCH_INIT,
     SESSION_COOKIE_NAME,
 )
-from .exceptions import AuthenticationError, PerplexityError, RateLimitError
-from .limits import DEFAULT_TIMEOUT
+from .exceptions import AuthenticationError, HTTPError, PerplexityError, RateLimitError
+from .logging import get_logger, log_request, log_response, log_retry
+from .resilience import RateLimiter, RetryConfig, get_random_browser_profile, retry_with_backoff
+
+
+if TYPE_CHECKING:
+    from collections.abc import Generator
+
+logger = get_logger(__name__)
 
 
 class HTTPClient:
-    """HTTP client wrapper with error handling for Perplexity API.
+    """HTTP client with retry, rate limiting, and error handling."""
 
-    Provides a unified interface for making HTTP requests with automatic
-    error handling and response processing.
-    """
-
-    __slots__ = ("_session",)
+    __slots__ = (
+        "_impersonate",
+        "_max_init_query_length",
+        "_rate_limiter",
+        "_retry_config",
+        "_rotate_fingerprint",
+        "_session",
+        "_session_token",
+        "_timeout",
+    )
 
     def __init__(
         self,
         session_token: str,
         timeout: int = DEFAULT_TIMEOUT,
         impersonate: str = "chrome",
+        max_retries: int = 3,
+        retry_base_delay: float = 1.0,
+        retry_max_delay: float = 60.0,
+        retry_jitter: float = 0.5,
+        requests_per_second: float = 0.5,
+        rotate_fingerprint: bool = True,
+        max_init_query_length: int = 2000,
     ) -> None:
-        """Initialize the HTTP client."""
+        self._session_token = session_token
+        self._timeout = timeout
+        self._impersonate = impersonate
+        self._rotate_fingerprint = rotate_fingerprint
+        self._max_init_query_length = max_init_query_length
+
+        self._retry_config = RetryConfig(
+            max_retries=max_retries,
+            base_delay=retry_base_delay,
+            max_delay=retry_max_delay,
+            jitter=retry_jitter,
+        )
+
+        self._rate_limiter: RateLimiter | None = None
+
+        if requests_per_second > 0:
+            self._rate_limiter = RateLimiter(requests_per_second=requests_per_second)
+
+        self._session = self._create_session(impersonate)
+        logger.debug("HTTPClient initialized | impersonate={}", impersonate)
+
+    def _create_session(self, impersonate: str) -> Session:
+        """Create a new HTTP session."""
 
         headers: dict[str, str] = {
             **DEFAULT_HEADERS,
             "Referer": f"{API_BASE_URL}/",
             "Origin": API_BASE_URL,
         }
-        cookies: dict[str, str] = {SESSION_COOKIE_NAME: session_token}
-        self._session: Session = Session(
+        cookies: dict[str, str] = {SESSION_COOKIE_NAME: self._session_token}
+
+        return Session(
             headers=headers,
             cookies=cookies,
-            timeout=timeout,
+            timeout=self._timeout,
             impersonate=impersonate,
         )
 
+    def _rotate_session(self) -> None:
+        """Rotate browser fingerprint."""
+
+        if self._rotate_fingerprint:
+            new_profile = get_random_browser_profile()
+            logger.debug("Rotating fingerprint | old={} new={}", self._impersonate, new_profile)
+
+            with suppress(Exception):
+                self._session.close()
+
+            self._impersonate = new_profile
+            self._session = self._create_session(new_profile)
+
+    def _on_retry(self, attempt: int, exception: BaseException, wait: float) -> None:
+        """Callback before each retry attempt."""
+
+        log_retry(attempt, self._retry_config.max_retries, exception, wait)
+
+        if self._rotate_fingerprint:
+            self._rotate_session()
+
     def _handle_error(self, error: Exception, context: str = "") -> None:
-        """Handle HTTP errors and raise appropriate custom exceptions.
-
-        Args:
-            error: The original exception.
-            context: Additional context for the error message.
-
-        Raises:
-            AuthenticationError: If status code is 403.
-            RateLimitError: If status code is 429.
-            PerplexityError: For other HTTP errors.
-        """
+        """Handle HTTP errors and raise appropriate exceptions."""
 
         status_code = None
-        response_text = None
+        response_body = None
+        url = None
+        response = getattr(error, "response", None)
 
-        if hasattr(error, "response") and error.response is not None:
-            status_code = getattr(error.response, "status_code", None)
+        if response is not None:
+            status_code = getattr(response, "status_code", None)
+            url = getattr(response, "url", None)
+
             try:
-                response_text = getattr(error.response, "text", None)
+                response_body = response.text if hasattr(response, "text") else None
             except Exception:
-                response_text = None
+                response_body = None
 
         if status_code == 403:
-            raise AuthenticationError() from error
-        elif status_code == 429:
-            raise RateLimitError() from error
-        elif status_code is not None:
-            body_snippet = ""
-            if isinstance(response_text, str) and response_text:
-                # Avoid noisy logs / huge HTML payloads.
-                snippet = response_text.strip().replace("\n", " ")
-                if len(snippet) > 300:
-                    snippet = snippet[:300] + "…"
-                body_snippet = f" Body: {snippet}"
-            raise PerplexityError(
-                f"{context}HTTP {status_code}: {error!s}{body_snippet}",
+            raise AuthenticationError from error
+        if status_code == 429:
+            raise RateLimitError from error
+        if status_code is not None:
+            raise HTTPError(
+                f"{context}HTTP {status_code}: {error!s}",
                 status_code=status_code,
+                url=str(url) if url else None,
+                response_body=response_body,
             ) from error
-        else:
-            raise PerplexityError(f"{context}{error!s}") from error
+
+        raise PerplexityError(f"{context}{error!s}") from error
+
+    def _throttle(self) -> None:
+        """Apply rate limiting."""
+
+        if self._rate_limiter:
+            self._rate_limiter.acquire()
 
     def get(
         self,
@@ -103,29 +159,34 @@ class HTTPClient:
         params: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
     ) -> CurlResponse:
-        """Make a GET request.
-
-        Args:
-            endpoint: The API endpoint (relative to BASE_URL).
-            params: Optional query parameters.
-
-        Returns:
-            The response object.
-
-        Raises:
-            AuthenticationError: If session token is invalid.
-            RateLimitError: If rate limit is exceeded.
-            PerplexityError: For other errors.
-        """
+        """Make a GET request with retry and rate limiting."""
 
         url = f"{API_BASE_URL}{endpoint}" if endpoint.startswith("/") else endpoint
+        log_request("GET", url, params=params)
+
+        def _do_get() -> CurlResponse:
+            self._throttle()
+            request_start = monotonic()
+            response = self._session.get(url, params=params, headers=headers)
+            elapsed_ms = (monotonic() - request_start) * 1000
+            log_response("GET", url, response.status_code, elapsed_ms=elapsed_ms)
+            response.raise_for_status()
+
+            return response
 
         try:
-            response = self._session.get(url, params=params, headers=headers)
-            response.raise_for_status()
-            return response
-        except Exception as e:
-            self._handle_error(e, f"GET {endpoint}: ")
+            return retry_with_backoff(
+                _do_get,
+                self._retry_config,
+                on_retry=self._on_retry,
+                retryable=(RateLimitError, ConnectionError, TimeoutError),
+            )
+        except (RateLimitError, AuthenticationError, HTTPError, PerplexityError):
+            raise
+        except Exception as error:
+            self._handle_error(error, f"GET {endpoint}: ")
+
+            raise
 
     def post(
         self,
@@ -133,46 +194,37 @@ class HTTPClient:
         json: dict[str, Any] | None = None,
         stream: bool = False,
     ) -> CurlResponse:
-        """Make a POST request.
-
-        Args:
-            endpoint: The API endpoint (relative to BASE_URL).
-            json: JSON data to send.
-            stream: Whether to stream the response.
-
-        Returns:
-            The response object.
-
-        Raises:
-            AuthenticationError: If session token is invalid.
-            RateLimitError: If rate limit is exceeded.
-            PerplexityError: For other errors.
-        """
+        """Make a POST request with retry and rate limiting."""
 
         url = f"{API_BASE_URL}{endpoint}" if endpoint.startswith("/") else endpoint
+        log_request("POST", url, body_size=len(str(json)) if json else 0)
+
+        def _do_post() -> CurlResponse:
+            self._throttle()
+            request_start = monotonic()
+            response = self._session.post(url, json=json, stream=stream)
+            elapsed_ms = (monotonic() - request_start) * 1000
+            log_response("POST", url, response.status_code, elapsed_ms=elapsed_ms)
+            response.raise_for_status()
+
+            return response
 
         try:
-            response = self._session.post(url, json=json, stream=stream)
-            response.raise_for_status()
-            return response
-        except Exception as e:
-            self._handle_error(e, f"POST {endpoint}: ")
+            return retry_with_backoff(
+                _do_post,
+                self._retry_config,
+                on_retry=self._on_retry,
+                retryable=(RateLimitError, ConnectionError, TimeoutError),
+            )
+        except (RateLimitError, AuthenticationError, HTTPError, PerplexityError):
+            raise
+        except Exception as error:
+            self._handle_error(error, f"POST {endpoint}: ")
+
+            raise
 
     def stream_lines(self, endpoint: str, json: dict[str, Any]) -> Generator[bytes, None, None]:
-        """Make a streaming POST request and yield lines.
-
-        Args:
-            endpoint: The API endpoint.
-            json: JSON data to send.
-
-        Yields:
-            Response lines as bytes.
-
-        Raises:
-            AuthenticationError: If session token is invalid.
-            RateLimitError: If rate limit is exceeded.
-            PerplexityError: For other errors.
-        """
+        """Make a streaming POST request and yield lines."""
 
         response = self.post(endpoint, json=json, stream=True)
 
@@ -182,13 +234,16 @@ class HTTPClient:
             response.close()
 
     def init_search(self, query: str) -> None:
-        """Initialize a search session.
+        """Initialize a search session (required before prompts).
 
-        This is required before making a prompt request.
-
-        Args:
-            query: The search query.
+        The query is sent as a GET parameter. Very long queries can exceed
+        server URI limits (HTTP 414). When ``max_init_query_length`` is set
+        (default 2000), the query is truncated to stay within safe limits.
+        Set to ``0`` to disable truncation.
         """
+
+        if self._max_init_query_length and len(query) > self._max_init_query_length:
+            query = query[: self._max_init_query_length]
 
         # Perplexity frequently tweaks the `/search/new` route behavior.
         # Historically, calling this first helped establish a "search session",
@@ -215,14 +270,7 @@ class HTTPClient:
             logging.warning("init_search failed (continuing anyway): %s", e)
 
     def stream_ask(self, payload: dict[str, Any]) -> Generator[bytes, None, None]:
-        """Stream a prompt request to the ask endpoint.
-
-        Args:
-            payload: The request payload.
-
-        Yields:
-            Response lines as bytes.
-        """
+        """Stream a prompt request to the ask endpoint."""
 
         yield from self.stream_lines(ENDPOINT_ASK, json=payload)
 
@@ -234,5 +282,5 @@ class HTTPClient:
     def __enter__(self) -> HTTPClient:
         return self
 
-    def __exit__(self, *args: Any) -> None:
+    def __exit__(self, *args: object) -> None:
         self.close()

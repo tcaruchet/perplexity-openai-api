@@ -1,9 +1,13 @@
 default:
     @just --list
 
-# Development
+install:
+    uv sync --upgrade --all-extras --all-groups
+
 lint:
+    npx prettier --check .
     uv run ruff check
+    uv run ty check
 
 format:
     uv run ruff format
