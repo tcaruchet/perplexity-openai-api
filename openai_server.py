@@ -111,10 +111,15 @@ class ModelRegistry:
     
     def __init__(self):
         self._models: list[FetchedModelInfo] = []
-        self._mapping: dict[str, Model] = {}
+        # Maps any alias/id -> MODELS key string (e.g. "perplexity-auto" -> "best")
+        self._mapping: dict[str, str] = {}
         self._available: list[dict[str, str]] = []
         self._last_fetch: datetime | None = None
         self._refresh_interval = 3600  # 1 hour
+        # Reverse map: model identifier -> MODELS key (built once)
+        self._identifier_to_key: dict[str, str] = {
+            m.identifier: k for k, m in MODELS.items()
+        }
     
     def fetch(self, session_token: str) -> None:
         """Fetch available models from Perplexity."""
@@ -134,21 +139,24 @@ class ModelRegistry:
     
     def _build_mappings(self) -> None:
         """Build model mappings and available list."""
-        # Static aliases
+        # Static aliases -> MODELS string keys
         self._mapping = {
-            "gpt-4": MODELS["best"],
-            "gpt-4-turbo": MODELS["best"],
-            "gpt-4o": MODELS["best"],
-            "perplexity": MODELS["best"],
-            "perplexity-auto": MODELS["best"],
-            "auto": MODELS["best"],
-            "perplexity-sonar": MODELS["sonar"],
-            "perplexity-research": MODELS["deep-research"],
-            "perplexity-labs": MODELS["best"],
-            "sonar": MODELS["sonar"],
-            "research": MODELS["deep-research"],
-            "labs": MODELS["best"],
+            "gpt-4": "best",
+            "gpt-4-turbo": "best",
+            "gpt-4o": "best",
+            "perplexity": "best",
+            "perplexity-auto": "best",
+            "auto": "best",
+            "perplexity-sonar": "sonar",
+            "perplexity-research": "deep-research",
+            "perplexity-labs": "best",
+            "sonar": "sonar",
+            "research": "deep-research",
+            "labs": "best",
         }
+        # Also register all MODELS keys directly
+        for key in MODELS:
+            self._mapping[key] = key
         
         self._available = [
             {"id": "perplexity-auto", "name": "Perplexity Auto", "owned_by": "perplexity"},
@@ -157,16 +165,18 @@ class ModelRegistry:
             {"id": "perplexity-labs", "name": "Perplexity Labs", "owned_by": "perplexity"},
         ]
         
-        # Add fetched models
+        # Add fetched models — map their identifier back to a MODELS key
         for model in self._models:
-            model_obj = Model(identifier=model.identifier, mode=model.mode)
+            models_key = self._identifier_to_key.get(model.identifier)
+            if models_key is None:
+                continue  # identifier not in MODELS, skip
             
             # Add direct identifier
-            self._mapping[model.identifier.lower()] = model_obj
+            self._mapping[model.identifier.lower()] = models_key
             
             # Add aliases
             for alias in self._generate_aliases(model.identifier):
-                self._mapping[alias.lower()] = model_obj
+                self._mapping[alias.lower()] = models_key
             
             # Add to available list
             if not any(m["id"] == model.identifier for m in self._available):
@@ -224,24 +234,27 @@ class ModelRegistry:
         """Use default models as fallback."""
         self._models = []
         self._mapping = {
-            "perplexity-auto": MODELS["best"],
-            "perplexity-sonar": MODELS["sonar"],
-            "perplexity-research": MODELS["deep-research"],
-            "auto": MODELS["best"],
+            "perplexity-auto": "best",
+            "perplexity-sonar": "sonar",
+            "perplexity-research": "deep-research",
+            "auto": "best",
         }
+        # Also register all MODELS keys directly
+        for key in MODELS:
+            self._mapping[key] = key
         self._available = [
             {"id": "perplexity-auto", "name": "Perplexity Auto", "owned_by": "perplexity"},
             {"id": "perplexity-sonar", "name": "Perplexity Sonar", "owned_by": "perplexity"},
             {"id": "perplexity-research", "name": "Perplexity Research", "owned_by": "perplexity"},
         ]
     
-    def get(self, name: str) -> Model:
-        """Get a Model by name or alias."""
+    def get(self, name: str) -> str:
+        """Get a MODELS key by name or alias."""
         key = name.lower().strip()
         if key in self._mapping:
             return self._mapping[key]
         logging.warning(f"Unknown model '{name}', using default")
-        return MODELS["best"]
+        return "best"
     
     def list_available(self) -> list[dict[str, str]]:
         """Get list of available models."""
@@ -981,7 +994,7 @@ async def stream_response(
     response_id: str,
     created: int,
     model_name: str,
-    model: Model,
+    model: str,
     query: str,
     session: ConversationSession,
 ) -> AsyncGenerator[str, None]:
