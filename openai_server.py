@@ -34,11 +34,10 @@ from perplexity_webui_scraper import (
     CitationMode,
     Conversation,
     ConversationConfig,
-    Models,
+    MODELS,
     Perplexity,
     PerplexityError
 )
-from perplexity_webui_scraper.models import Model
 from fetch_models import ModelInfo as FetchedModelInfo
 from fetch_models import PerplexityModelsFetcher
 
@@ -137,18 +136,18 @@ class ModelRegistry:
         """Build model mappings and available list."""
         # Static aliases
         self._mapping = {
-            "gpt-4": Models.BEST,
-            "gpt-4-turbo": Models.BEST,
-            "gpt-4o": Models.BEST,
-            "perplexity": Models.BEST,
-            "perplexity-auto": Models.BEST,
-            "auto": Models.BEST,
-            "perplexity-sonar": Models.SONAR,
-            "perplexity-research": Models.RESEARCH,
-            "perplexity-labs": Models.LABS,
-            "sonar": Models.SONAR,
-            "research": Models.RESEARCH,
-            "labs": Models.LABS,
+            "gpt-4": MODELS["best"],
+            "gpt-4-turbo": MODELS["best"],
+            "gpt-4o": MODELS["best"],
+            "perplexity": MODELS["best"],
+            "perplexity-auto": MODELS["best"],
+            "auto": MODELS["best"],
+            "perplexity-sonar": MODELS["sonar"],
+            "perplexity-research": MODELS["deep-research"],
+            "perplexity-labs": MODELS["best"],
+            "sonar": MODELS["sonar"],
+            "research": MODELS["deep-research"],
+            "labs": MODELS["best"],
         }
         
         self._available = [
@@ -225,10 +224,10 @@ class ModelRegistry:
         """Use default models as fallback."""
         self._models = []
         self._mapping = {
-            "perplexity-auto": Models.BEST,
-            "perplexity-sonar": Models.SONAR,
-            "perplexity-research": Models.RESEARCH,
-            "auto": Models.BEST,
+            "perplexity-auto": MODELS["best"],
+            "perplexity-sonar": MODELS["sonar"],
+            "perplexity-research": MODELS["deep-research"],
+            "auto": MODELS["best"],
         }
         self._available = [
             {"id": "perplexity-auto", "name": "Perplexity Auto", "owned_by": "perplexity"},
@@ -242,7 +241,7 @@ class ModelRegistry:
         if key in self._mapping:
             return self._mapping[key]
         logging.warning(f"Unknown model '{name}', using default")
-        return Models.BEST
+        return MODELS["best"]
     
     def list_available(self) -> list[dict[str, str]]:
         """Get list of available models."""

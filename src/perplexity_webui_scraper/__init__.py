@@ -40,7 +40,6 @@ __all__: list[str] = [
     "get_available_models",
     "Model",
     "ModelInfo",
-    "Models",
     "Perplexity",
     "PerplexityError",
     "PerplexityModelsFetcher",
